@@ -5,7 +5,7 @@ import morgan from "morgan";
 
 // import database
 import { students } from "@db/db.js";
-import { type Student } from "@libs/types.js";
+import { type Student, type Course } from "@libs/types.js";
 import {
   zStudentDeleteBody,
   zStudentPostBody,
@@ -24,65 +24,59 @@ app.get("/", (req: Request, res: Response) => {
   res.send("API services for Student Data");
 });
 
-// GET /api/students
-// get students (by studentId and/or program)
+// GET /students
+// get students (by program)
 app.get("/api/students", (req: Request, res: Response) => {
   try {
-    const studentId = req.query.studentId as string;
-    const program = req.query.program as string;
+    const program = req.query.program;
+    const studentID = req.query.studentId;
 
-    let filtered_students = [...students];
-
-    // กรองตาม studentId (ถ้ามี)
-    if (studentId) {
+    let filtered_students = students;
+    if (studentID) {
       filtered_students = filtered_students.filter(
-        (student) => student.studentId === studentId,
+        (student) => student.studentId === studentID,
       );
     }
-
-    // กรองตาม program ต่อจากที่กรองไว้แล้ว (ถ้ามี)
     if (program) {
       filtered_students = filtered_students.filter(
-        (student) => student.program.toLowerCase() === program.toLowerCase(),
+        (student) => student.program === program,
       );
     }
-
     return res.json({
       ok: true,
-      students: filtered_students,
+      student: filtered_students,
     });
   } catch (err) {
     return res.json({
-      ok: false,
+      success: false,
       message: "Something is wrong, please try again",
       error: err,
     });
   }
 });
 
-// POST /api/students, body = {new student data}
+// POST /students, body = {new student data}
 // add a new student
 app.post("/api/students", (req: Request, res: Response) => {
   try {
     const body = req.body as Student;
 
     // validate req.body with predefined validator
-    const result = zStudentPostBody.safeParse(body);
+    const result = zStudentPostBody.safeParse(body); // check zod
     if (!result.success) {
       return res.json({
-        ok: false,
         message: "Validation failed",
         errors: result.error.issues[0]?.message,
       });
     }
 
-    // check duplicate studentId
+    //check duplicate studentId
     const found = students.find(
       (student) => student.studentId === body.studentId,
     );
     if (found) {
       return res.json({
-        ok: false,
+        success: false,
         message: "Student is already exists",
       });
     }
@@ -92,45 +86,45 @@ app.post("/api/students", (req: Request, res: Response) => {
     students.push(new_student);
 
     // add response header 'Link'
-    res.set("Link", `/api/students/${new_student.studentId}`);
+    res.set("Link", `/students/${new_student.studentId}`);
 
     return res.json({
-      ok: true,
+      success: true,
       data: new_student,
     });
+    // return res.json({ ok: true, message: "successfully" });
   } catch (err) {
     return res.json({
-      ok: false,
-      message: "Something is wrong, please try again",
+      success: false,
+      message: "Somthing is wrong, please try again",
       error: err,
     });
   }
 });
 
-// PUT /api/students, body = {studentId}
+// PUT /students, body = {studentId}
 // Update specified student
 app.put("/api/students", (req: Request, res: Response) => {
   try {
     const body = req.body as Student;
 
     // validate req.body with predefined validator
-    const result = zStudentPutBody.safeParse(body);
+    const result = zStudentPutBody.safeParse(body); // check zod
     if (!result.success) {
       return res.json({
-        ok: false,
         message: "Validation failed",
         errors: result.error.issues[0]?.message,
       });
     }
 
-    // check duplicate studentId
+    //check duplicate studentId
     const foundIndex = students.findIndex(
       (student) => student.studentId === body.studentId,
     );
 
     if (foundIndex === -1) {
       return res.json({
-        ok: false,
+        success: false,
         message: "Student does not exists",
       });
     }
@@ -139,28 +133,29 @@ app.put("/api/students", (req: Request, res: Response) => {
     students[foundIndex] = { ...students[foundIndex], ...body };
 
     // add response header 'Link'
-    res.set("Link", `/api/students/${body.studentId}`);
+    res.set("Link", `/students/${body.studentId}`);
 
     return res.json({
-      ok: true,
+      success: true,
       message: `Student ${body.studentId} has been updated successfully`,
       data: students[foundIndex],
     });
   } catch (err) {
     return res.json({
-      ok: false,
-      message: "Something is wrong, please try again",
+      success: false,
+      message: "Somthing is wrong, please try again",
       error: err,
     });
   }
 });
 
-// DELETE /api/students, body = {studentId}
+// DELETE /students, body = {studentId}
 app.delete("/api/students", (req: Request, res: Response) => {
   try {
-    const result = zStudentDeleteBody.safeParse(req.body);
+    const body = req.body as Student;
 
-    // รหัสนักศึกษาไม่ถูกต้อง (ไม่เท่ากับ 9 หลัก) -> 400 Bad Request
+    // validate req.body with predefined validator
+    const result = zStudentDeleteBody.safeParse(body); // check zod
     if (!result.success) {
       return res.status(400).json({
         ok: false,
@@ -168,12 +163,11 @@ app.delete("/api/students", (req: Request, res: Response) => {
       });
     }
 
-    const { studentId } = result.data;
+    //check duplicate studentId
     const foundIndex = students.findIndex(
-      (student) => student.studentId === studentId,
+      (student) => student.studentId === body.studentId,
     );
 
-    // ไม่พบนักศึกษาในระบบ -> 404 Not Found
     if (foundIndex === -1) {
       return res.status(404).json({
         ok: false,
@@ -181,17 +175,16 @@ app.delete("/api/students", (req: Request, res: Response) => {
       });
     }
 
-    // ลบนักศึกษาออกจากระบบ
     students.splice(foundIndex, 1);
 
-    return res.json({
+    return res.status(200).json({
       ok: true,
-      message: `Student Id ${studentId} has been deleted`,
+      message: `Student Id ${body.studentId} has been deleted`,
     });
   } catch (err) {
-    return res.status(500).json({
-      ok: false,
-      message: "Something is wrong, please try again",
+    return res.json({
+      success: false,
+      message: "Somthing is wrong, please try again",
       error: err,
     });
   }
@@ -199,15 +192,23 @@ app.delete("/api/students", (req: Request, res: Response) => {
 
 // GET /api/me
 app.get("/api/me", (req: Request, res: Response) => {
-  return res.json({
-    ok: true,
-    fullName: "นภัสดล จำปา",
-    studentId: "680610687",
-  });
+  try {
+    return res.json({
+      ok: true,
+      fullName: "Noppanat Phromsen",
+      studentId: "680610686",
+    });
+  } catch (err) {
+    return res.json({
+      success: false,
+      message: "Somthing is wrong, please try again",
+      error: err,
+    });
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+app.listen(port, async () => {
+  console.log(`🚀 Server running on http://localhost:${port}`);
 });
 
 export default app;
