@@ -196,7 +196,7 @@ app.get("/api/me", (req: Request, res: Response) => {
     return res.json({
       ok: true,
       fullName: "Napatsadon Jampa",
-      studentId: "680610686",
+      studentId: "680610687",
     });
   } catch (err) {
     return res.json({
